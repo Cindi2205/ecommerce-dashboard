@@ -19,11 +19,11 @@ def create_top_categories_df(df):
     return payment_dominance
 
 def create_delivery_delay_df(df):
-    # Membaca data mentah pendukung secara langsung untuk memastikan kolom lengkap
-    orders_df = pd.read_csv("data/orders_dataset.csv")
-    order_items_df = pd.read_csv("data/order_items_dataset.csv")
-    sellers_df = pd.read_csv("data/sellers_dataset.csv")
-    order_reviews_df = pd.read_csv("data/order_reviews_dataset.csv")
+    # Membaca data mentah langsung dari direktori utama (tanpa folder data/)
+    orders_df = pd.read_csv("orders_dataset.csv")
+    order_items_df = pd.read_csv("order_items_dataset.csv")
+    sellers_df = pd.read_csv("sellers_dataset.csv")
+    order_reviews_df = pd.read_csv("order_reviews_dataset.csv")
     
     # Menggabungkan dataframe yang dibutuhkan
     df_q2_merged = orders_df.merge(order_items_df, on='order_id', how='inner') \

@@ -19,22 +19,30 @@ def create_top_categories_df(df):
     return payment_dominance
 
 def create_delivery_delay_df(df):
-    # Membuat salinan agar tidak mengubah dataframe utama
-    df_copy = df.copy()
+    # Membaca data mentah pendukung secara langsung untuk memastikan kolom lengkap
+    orders_df = pd.read_csv("data/orders_dataset.csv")
+    order_items_df = pd.read_csv("data/order_items_dataset.csv")
+    sellers_df = pd.read_csv("data/sellers_dataset.csv")
+    order_reviews_df = pd.read_csv("data/order_reviews_dataset.csv")
+    
+    # Menggabungkan dataframe yang dibutuhkan
+    df_q2_merged = orders_df.merge(order_items_df, on='order_id', how='inner') \
+        .merge(sellers_df, on='seller_id', how='inner') \
+        .merge(order_reviews_df, on='order_id', how='inner')
     
     # Memastikan kolom datetime dikonversi
-    df_copy['order_delivered_customer_date'] = pd.to_datetime(df_copy['order_delivered_customer_date'])
-    df_copy['order_estimated_delivery_date'] = pd.to_datetime(df_copy['order_estimated_delivery_date'])
+    df_q2_merged['order_delivered_customer_date'] = pd.to_datetime(df_q2_merged['order_delivered_customer_date'])
+    df_q2_merged['order_estimated_delivery_date'] = pd.to_datetime(df_q2_merged['order_estimated_delivery_date'])
     
     # Filter seller di luar Rio de Janeiro (RJ)
-    if 'seller_state' in df_copy.columns:
-        df_outside_rj = df_copy[df_copy['seller_state'].str.upper() != 'RJ'].copy()
-    else:
-        df_outside_rj = df_copy.copy()
-        
+    df_outside_rj = df_q2_merged[df_q2_merged['seller_state'].str.upper() != 'RJ'].copy()
+    
+    # Menghitung selisih hari keterlambatan
     df_outside_rj['delivery_delay_days'] = (df_outside_rj['order_delivered_customer_date'] - df_outside_rj['order_estimated_delivery_date']).dt.days
 
+    # Filter ulasan buruk (score 1) dan yang benar-benar terlambat (> 0 hari)
     bad_reviews_delayed = df_outside_rj[(df_outside_rj['review_score'] == 1) & (df_outside_rj['delivery_delay_days'] > 0)]
+    
     return bad_reviews_delayed
 
 # 2. Load Cleaned Data (main_data.csv)

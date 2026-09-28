@@ -12,4 +12,4 @@ pipenv install
 pipenv shell
 pip install -r requirements.txt
 
-streamlit run dashboard/dashboard.py
+streamlit run dashboard.py

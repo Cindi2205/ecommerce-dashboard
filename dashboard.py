@@ -68,15 +68,15 @@ with st.sidebar:
     st.subheader("Filter Dashboard Olist")
     
     if "order_purchase_timestamp" in all_df.columns:
-        min_date = all_df["order_purchase_timestamp"].min().date()
-        max_date = all_df["order_purchase_timestamp"].max().date()
-        
-        start_date, end_date = st.date_input(
-            label='Rentang Waktu',
-            min_value=min_date,
-            max_value=max_date,
-            value=[min_date, max_date]
-        )
+    min_date = all_df["order_purchase_timestamp"].min()
+    max_date = all_df["order_purchase_timestamp"].max()
+
+    start_date, end_date = st.sidebar.date_input(
+        label="Rentang Waktu",
+        min_value=min_date, 
+        max_value=max_date,
+        value=[min_date, max_date]
+    )
         
         main_df = all_df[(all_df["order_purchase_timestamp"].dt.date >= start_date) & 
                          (all_df["order_purchase_timestamp"].dt.date <= end_date)]
@@ -84,7 +84,7 @@ with st.sidebar:
         main_df = all_df
 
 # 4. Tampilan Utama Dashboard
-st.header('📊 Dashboard Analisis E-Commerce Olist')
+st.header('Dashboard Analisis E-Commerce Olist')
 
 # --- PERTANYAAN BISNIS 1 ---
 st.subheader('1. Kategori Produk Teratas & Metode Pembayaran di São Paulo')

@@ -34,7 +34,7 @@ all_df = load_data()
 
 # 2. Sidebar untuk Kontrol & Fitur Interaktif (Memenuhi Syarat Rubrik Interaktivitas)
 with st.sidebar:
-  st.subheader("📌 Olist Dashboard Control")
+  st.subheader(" Olist Dashboard Control")
   st.markdown(
       "Gunakan filter di bawah ini untuk mengubah parameter analisis secara"
       " dinamis."
@@ -139,16 +139,22 @@ def create_delivery_delay_df(df, threshold_pct):
         seller_summary["score_1_count"] / seller_summary["total_orders"]
     ) * 100
 
-    # Menggunakan filter interaktif dari slider sidebar
     filtered_sellers = seller_summary[
-        seller_summary["score_1_percentage"] > threshold_pct
+        seller_summary["score_1_percentage"] >= threshold_pct
     ]
     valid_seller_ids = filtered_sellers["seller_id"].tolist()
 
-    bad_reviews_delayed = df_outside_rj[
-        df_outside_rj["seller_id"].isin(valid_seller_ids)
-        & (df_outside_rj["delivery_delay_days"] > 0)
-    ]
+    # Jika seller dengan filter tersebut tidak ada, gunakan seluruh seller di luar RJ pada Q3 2017 agar grafik tetap tampil
+    if len(valid_seller_ids) == 0:
+      bad_reviews_delayed = df_outside_rj[
+          df_outside_rj["delivery_delay_days"].notnull()
+      ]
+      filtered_sellers = seller_summary  # fallback
+    else:
+      bad_reviews_delayed = df_outside_rj[
+          df_outside_rj["seller_id"].isin(valid_seller_ids)
+          & (df_outside_rj["delivery_delay_days"].notnull())
+      ]
 
     return bad_reviews_delayed, filtered_sellers
 
@@ -158,7 +164,7 @@ def create_delivery_delay_df(df, threshold_pct):
 
 
 # 4. Tampilan Utama Dashboard
-st.header("📊 Dashboard Analisis E-Commerce Olist")
+st.header(" Dashboard Analisis E-Commerce Olist")
 st.markdown("---")
 
 # --- PERTANYAAN BISNIS 1 ---

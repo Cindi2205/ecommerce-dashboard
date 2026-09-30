@@ -128,7 +128,7 @@ def create_delivery_delay_df(df):
 
 # 3. Sidebar (Informasi / Kontrol Umum)
 with st.sidebar:
-  st.subheader("📌 Olist Dashboard Control")
+  st.subheader(" Olist Dashboard Control")
   st.markdown(
       "Dashboard ini menampilkan analisis berdasarkan kriteria bisnis spesifik"
       " (H1 2018 & Q3 2017)."
@@ -136,7 +136,7 @@ with st.sidebar:
   st.info("Periode waktu dikunci otomatis sesuai instruksi pertanyaan.")
 
 # 4. Tampilan Utama Dashboard
-st.header("📊 Dashboard Analisis E-Commerce Olist")
+st.header(" Dashboard Analisis E-Commerce Olist")
 st.markdown("---")
 
 # --- PERTANYAAN BISNIS 1 ---

@@ -7,7 +7,7 @@ import streamlit as st
 @st.cache_data
 def load_data():
   # Pastikan file main_data.csv berada di folder yang sama dengan dashboard.py
-  df = pd.read_csv('main_data.csv')
+  df = pd.read_csv('main_data.gz', compression='gzip')
 
   # Konversi kolom tanggal jika diperlukan
   df['order_purchase_timestamp'] = pd.to_datetime(

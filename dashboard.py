@@ -10,11 +10,12 @@ sns.set(style="darkgrid")
 # 1. Load Cleaned Data dengan Path Otomatis Berbasis Lokasi File
 @st.cache_data
 def load_data():
-  # Mendapatkan direktori tempat script python ini berada
   current_dir = os.path.dirname(os.path.abspath(__file__))
-  file_path = os.path.join(current_dir, "main_data.csv")
 
-  data = pd.read_csv(file_path)
+  file_path = os.path.join(current_dir, "main_data")
+
+  data = pd.read_csv(file_path, compression="gzip")
+
   datetime_columns = [
       "order_purchase_timestamp",
       "order_delivered_customer_date",

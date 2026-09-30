@@ -1,228 +1,141 @@
-import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
 
-sns.set(style="darkgrid")
-
-# Konfigurasi Halaman Streamlit
-st.set_page_config(
-    page_title="Olist E-Commerce Dashboard", page_icon="📊", layout="wide"
-)
-
-
-# 1. Load Cleaned Data
+# Load data utama yang sudah disimpan dari notebook
 @st.cache_data
 def load_data():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "main_data.gz")
-    data = pd.read_csv(file_path, compression="gzip")
+  # Pastikan file main_data.csv berada di folder yang sama dengan dashboard.py
+  df = pd.read_csv('main_data.csv')
 
-    datetime_columns = [
-        "order_purchase_timestamp",
-        "order_delivered_customer_date",
-        "order_estimated_delivery_date",
-    ]
-    for col in datetime_columns:
-        if col in data.columns:
-            data[col] = pd.to_datetime(data[col])
-    return data
-
-
-all_df = load_data()
-
-# 2. Sidebar untuk Kontrol & Fitur Interaktif
-with st.sidebar:
-    st.subheader(" Olist Dashboard Control")
-    st.markdown(
-        "Gunakan filter di bawah ini untuk mengubah parameter analisis secara"
-        " dinamis."
-    )
-
-    st.markdown("---")
-    st.markdown("### Filter Pertanyaan 1")
-    top_n_cat = st.slider(
-        "Pilih Jumlah Kategori Teratas:", min_value=3, max_value=10, value=5
-    )
-
-    st.markdown("---")
-    st.markdown("### Filter Pertanyaan 2")
-    min_score_1_pct = st.slider(
-        "Ambang Batas Minimum Review Score 1 (%):",
-        min_value=0,
-        max_value=50,
-        value=10,
-        step=5,
-    )
+  # Konversi kolom tanggal jika diperlukan
+  df['order_purchase_timestamp'] = pd.to_datetime(
+      df['order_purchase_timestamp']
+  )
+  df['order_delivered_customer_date'] = pd.to_datetime(
+      df['order_delivered_customer_date']
+  )
+  df['order_estimated_delivery_date'] = pd.to_datetime(
+      df['order_estimated_delivery_date']
+  )
+  return df
 
 
-# --- FUNGSI ANALISIS PERTANYAAN 1 ---
-def create_top_categories_df(df, top_n):
-    if "order_purchase_timestamp" in df.columns:
-        df_h1_2018 = df[
-            (df["order_purchase_timestamp"] >= "2018-01-01")
-            & (df["order_purchase_timestamp"] <= "2018-06-30")
-        ]
-    else:
-        df_h1_2018 = df.copy()
+df_main = load_data()
 
-    if "customer_city" in df_h1_2018.columns:
-        df_q1_sp = df_h1_2018[
-            df_h1_2018["customer_city"].str.lower() == "sao paulo"
-        ]
-    else:
-        df_q1_sp = pd.DataFrame()
-
-    if df_q1_sp.empty:
-        return pd.DataFrame()
-
-    top_categories = (
-        df_q1_sp.groupby("product_category_name")["price"]
-        .sum()
-        .reset_index()
-        .sort_values(by="price", ascending=False)
-        .head(top_n)
-    )
-
-    top_categories_list = top_categories["product_category_name"].tolist()
-    df_top_sp = df_q1_sp[
-        df_q1_sp["product_category_name"].isin(top_categories_list)
-    ]
-
-    payment_dominance = (
-        df_top_sp.groupby(["product_category_name", "payment_type"])["order_id"]
-        .count()
-        .reset_index(name="transaction_count")
-    )
-    return payment_dominance
-
-
-# --- FUNGSI ANALISIS PERTANYAAN 2 ---
-def create_delivery_delay_df(df, threshold_pct):
-    if "order_purchase_timestamp" in df.columns:
-        df_q3_2017 = df[
-            (df["order_purchase_timestamp"] >= "2017-07-01")
-            & (df["order_purchase_timestamp"] <= "2017-09-30")
-        ]
-    else:
-        df_q3_2017 = df.copy()
-
-    if "seller_state" in df_q3_2017.columns:
-        df_outside_rj = df_q3_2017[
-            df_q3_2017["seller_state"].str.upper() != "RJ"
-        ].copy()
-    else:
-        return pd.DataFrame(), pd.DataFrame()
-
-    df_outside_rj["delivery_delay_days"] = (
-        df_outside_rj["order_delivered_customer_date"]
-        - df_outside_rj["order_estimated_delivery_date"]
-    ).dt.days
-
-    seller_summary = (
-        df_outside_rj.groupby("seller_id")
-        .agg(
-            total_orders=("order_id", "count"),
-            score_1_count=(
-                "review_score",
-                lambda x: (x == 1).sum(),
-            ),
-        )
-        .reset_index()
-    )
-
-    seller_summary["score_1_percentage"] = (
-        seller_summary["score_1_count"] / seller_summary["total_orders"]
-    ) * 100
-
-    filtered_sellers = seller_summary[
-        seller_summary["score_1_percentage"] >= threshold_pct
-    ]
-    valid_seller_ids = filtered_sellers["seller_id"].tolist()
-
-    # Fallback agar data tidak pernah kosong
-    if len(valid_seller_ids) == 0:
-        bad_reviews_delayed = df_outside_rj[
-            df_outside_rj["delivery_delay_days"].notnull()
-        ]
-        filtered_sellers = seller_summary
-    else:
-        bad_reviews_delayed = df_outside_rj[
-            df_outside_rj["seller_id"].isin(valid_seller_ids)
-            & (df_outside_rj["delivery_delay_days"].notnull())
-        ]
-
-    if bad_reviews_delayed.empty:
-        bad_reviews_delayed = df_outside_rj.dropna(
-            subset=["delivery_delay_days"]
-        )
-
-    return bad_reviews_delayed, filtered_sellers
-
-
-# 4. Tampilan Utama Dashboard
-st.header(" Dashboard Analisis E-Commerce Olist")
-st.markdown("---")
-
-# --- PERTANYAAN BISNIS 1 ---
-st.subheader(
-    f"1. Metode Pembayaran pada {top_n_cat} Kategori Produk Teratas di São"
-    " Paulo (H1 2018)"
+# Judul Dashboard
+st.title('Dashboard Analisis E-Commerce Olist')
+st.markdown(
+    'Visualisasi data berdasarkan pertanyaan bisnis analisis performa'
+    ' penjualan dan logistik.'
 )
 
-payment_dominance_df = create_top_categories_df(all_df, top_n_cat)
-
-if payment_dominance_df.empty:
-    st.warning("Tidak ada data yang ditemukan untuk kriteria tersebut.")
-else:
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.barplot(
-        x="product_category_name",
-        y="transaction_count",
-        hue="payment_type",
-        data=payment_dominance_df,
-        palette="Blues",
-        ax=ax,
-    )
-    ax.set_xlabel("Kategori Produk", fontsize=12)
-    ax.set_ylabel("Jumlah Transaksi", fontsize=12)
-    plt.xticks(rotation=25, ha="right")
-    st.pyplot(fig)
-
-st.markdown("---")
-
-# --- PERTANYAAN BISNIS 2 ---
-st.subheader(
-    "2. Distribusi Keterlambatan Pengiriman oleh Seller di Luar Rio de Janeiro"
-    f" (Review Score 1 >= {min_score_1_pct}%, Q3 2017)"
+# Sidebar untuk navigasi atau informasi
+st.sidebar.header('Navigasi & Filter')
+analysis_choice = st.sidebar.selectbox(
+    'Pilih Analisis:',
+    [
+        'Top 5 Kategori & Metode Pembayaran (Sao Paulo)',
+        'Analisis Keterlambatan & Ulasan Buruk (Non-RJ)',
+    ],
 )
 
-bad_reviews_df, seller_metrics_df = create_delivery_delay_df(
-    all_df, min_score_1_pct
-)
+if analysis_choice == 'Top 5 Kategori & Metode Pembayaran (Sao Paulo)':
+  st.subheader(
+      'Metode Pembayaran pada 5 Kategori Produk Teratas (Sao Paulo)'
+  )
 
-if bad_reviews_df.empty:
-    st.info("Tidak ada data ulasan buruk dengan ambang batas tersebut.")
-else:
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.histplot(
-        bad_reviews_df["delivery_delay_days"],
-        bins=30,
-        kde=True,
-        color="#ff6b6b",
-        ax=ax,
+  # Filter data sesuai dengan logic di notebook Anda
+  df_sp = df_main[df_main['customer_city'].str.lower() == 'sao paulo']
+
+  # Ambil Top 5 Kategori berdasarkan Total Price
+  top_5_cat = (
+      df_sp.groupby('product_category_name')['price']
+      .sum()
+      .reset_index()
+      .sort_values(by='price', ascending=False)
+      .head(5)
+  )
+
+  top_cat_list = top_5_cat['product_category_name'].tolist()
+  df_top5_sp = df_sp[df_sp['product_category_name'].isin(top_cat_list)]
+
+  # Agregasi untuk visualisasi pembayaran
+  payment_dominance = (
+      df_top5_sp.groupby(['product_category_name', 'payment_type'])['order_id']
+      .count()
+      .reset_index(name='transaction_count')
+  )
+
+  # Visualisasi menggunakan Seaborn / Matplotlib di Streamlit
+  fig, ax = plt.subplots(figsize=(10, 6))
+  sns.barplot(
+      data=payment_dominance,
+      x='product_category_name',
+      y='transaction_count',
+      hue='payment_type',
+      ax=ax,
+  )
+  plt.xticks(rotation=45, ha='right')
+  plt.xlabel('Kategori Produk')
+  plt.ylabel('Jumlah Transaksi')
+  plt.title('Dominasi Metode Pembayaran pada Top 5 Kategori di Sao Paulo')
+  st.pyplot(fig)
+
+elif analysis_choice == 'Analisis Keterlambatan & Ulasan Buruk (Non-RJ)':
+  st.subheader('Rata-rata Keterlambatan Pengiriman & Ulasan Buruk (Seller Non-RJ)')
+
+  # Hitung ulang / filter berdasarkan kriteria di notebook
+  df_main['delivery_delay_days'] = (
+      df_main['order_delivered_customer_date']
+      - df_main['order_estimated_delivery_date']
+  ).dt.days
+
+  # Filter seller state selain RJ
+  if 'seller_state' in df_main.columns:
+    df_non_rj = df_main[df_main['seller_state'].str.upper() != 'RJ']
+  else:
+    df_non_rj = df_main  # Fallback jika kolom belum merge sempurna di main_data
+
+  bad_reviews_delayed = df_non_rj[
+      (df_non_rj['review_score'] == 1) & (df_non_rj['delivery_delay_days'] > 0)
+  ]
+
+  total_reviews_outside = len(df_non_rj)
+  total_score1_delayed = len(bad_reviews_delayed)
+  percentage_score1 = (
+      (total_score1_delayed / total_reviews_outside) * 100
+      if total_reviews_outside > 0
+      else 0
+  )
+  mean_delay_days = bad_reviews_delayed['delivery_delay_days'].mean()
+
+  # Tampilkan Metric Cards di Streamlit
+  col1, col2 = st.columns(2)
+  with col1:
+    st.metric(
+        label='Persentase Ulasan Buruk (Score 1) karena Terlambat',
+        value=f'{percentage_score1:.2f}%',
     )
-    ax.set_xlabel("Hari Keterlambatan (Hari)", fontsize=12)
-    ax.set_ylabel("Frekuensi", fontsize=12)
-    st.pyplot(fig)
+  with col2:
+    st.metric(
+        label='Rata-rata Selisih Keterlambatan',
+        value=f'{mean_delay_days:.2f} Hari',
+    )
 
-    # Metrik Pendukung
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Seller Teridentifikasi", value=len(seller_metrics_df))
-    with col2:
-        st.metric("Total Transaksi Bermasalah", value=len(bad_reviews_df))
-    with col3:
-        mean_delay = round(bad_reviews_df["delivery_delay_days"].mean(), 1)
-        st.metric("Rata-rata Keterlambatan (Hari)", value=mean_delay)
+  # Visualisasi tambahan distribusi hari keterlambatan
+  fig, ax = plt.subplots(figsize=(8, 4))
+  sns.histplot(
+      bad_reviews_delayed['delivery_delay_days'].dropna(),
+      bins=30,
+      kde=True,
+      color='red',
+      ax=ax,
+  )
+  plt.xlabel('Hari Keterlambatan')
+  plt.ylabel('Frekuensi Ulasan Skor 1')
+  plt.title(
+      'Distribusi Waktu Keterlambatan Pengiriman dengan Ulasan Buruk (Non-RJ)'
+  )
+  st.pyplot(fig)

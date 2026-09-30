@@ -1,3 +1,4 @@
+import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -5,10 +6,15 @@ import streamlit as st
 
 sns.set(style="darkgrid")
 
-# 1. Load Cleaned Data (main_data.csv)
+
+# 1. Load Cleaned Data dengan Path Otomatis Berbasis Lokasi File
 @st.cache_data
 def load_data():
-  data = pd.read_csv("main_data.csv")
+  # Mendapatkan direktori tempat script python ini berada
+  current_dir = os.path.dirname(os.path.abspath(__file__))
+  file_path = os.path.join(current_dir, "main_data.csv")
+
+  data = pd.read_csv(file_path)
   datetime_columns = [
       "order_purchase_timestamp",
       "order_delivered_customer_date",
@@ -23,9 +29,8 @@ def load_data():
 all_df = load_data()
 
 
-# 2. Helper Functions untuk Menyiapkan Dataframe Dashboard (Mandiri & Sesuai Periode Soal)
+# 2. Helper Functions untuk Menyiapkan Dataframe Dashboard
 def create_top_categories_df(df):
-  # Filter spesifik H1 2018 (Januari - Juni 2018)
   if "order_purchase_timestamp" in df.columns:
     df_h1_2018 = df[
         (df["order_purchase_timestamp"] >= "2018-01-01")
@@ -34,7 +39,6 @@ def create_top_categories_df(df):
   else:
     df_h1_2018 = df.copy()
 
-  # Filter kota São Paulo
   if "customer_city" in df_h1_2018.columns:
     df_q1_sp = df_h1_2018[
         df_h1_2018["customer_city"].str.lower() == "sao paulo"
@@ -68,7 +72,6 @@ def create_top_categories_df(df):
 
 def create_delivery_delay_df(df):
   try:
-    # Filter spesifik Q3 2017 (Juli - September 2017)
     if "order_purchase_timestamp" in df.columns:
       df_q3_2017 = df[
           (df["order_purchase_timestamp"] >= "2017-07-01")
@@ -77,7 +80,6 @@ def create_delivery_delay_df(df):
     else:
       df_q3_2017 = df.copy()
 
-    # Filter seller di luar Rio de Janeiro (!= 'RJ')
     if "seller_state" in df_q3_2017.columns:
       df_outside_rj = df_q3_2017[
           df_q3_2017["seller_state"].str.upper() != "RJ"
@@ -85,13 +87,11 @@ def create_delivery_delay_df(df):
     else:
       return pd.DataFrame(), pd.DataFrame()
 
-    # Hitung selisih hari keterlambatan pengiriman
     df_outside_rj["delivery_delay_days"] = (
         df_outside_rj["order_delivered_customer_date"]
         - df_outside_rj["order_estimated_delivery_date"]
     ).dt.days
 
-    # Agregasi per-seller untuk menghitung proporsi review score 1 secara akurat
     seller_summary = (
         df_outside_rj.groupby("seller_id")
         .agg(
@@ -108,13 +108,11 @@ def create_delivery_delay_df(df):
         seller_summary["score_1_count"] / seller_summary["total_orders"]
     ) * 100
 
-    # Filter seller dengan proporsi review score 1 > 20%
     filtered_sellers = seller_summary[
         seller_summary["score_1_percentage"] > 20
     ]
     valid_seller_ids = filtered_sellers["seller_id"].tolist()
 
-    # Filter transaksi akhir berdasarkan seller valid dan benar-benar terlambat (> 0 hari)
     bad_reviews_delayed = df_outside_rj[
         df_outside_rj["seller_id"].isin(valid_seller_ids)
         & (df_outside_rj["delivery_delay_days"] > 0)

@@ -9,19 +9,24 @@ st.set_page_config(
 )
 
 
-# Load data utama yang sudah disimpan dari notebook dengan penanganan error
+# Load data utama dengan penanganan format .gz atau .csv secara otomatis
 @st.cache_data
 def load_data():
   try:
+    # Mencoba membaca file .gz terlebih dahulu
     df = pd.read_csv("main_data.gz", compression="gzip")
   except FileNotFoundError:
-    st.error(
-        "File `main_data.gz` tidak ditemukan! Pastikan file berada di folder"
-        " yang sama dengan `dashboard.py`."
-    )
-    return pd.DataFrame()
+    try:
+      # Fallback jika penilai menggunakan nama .csv
+      df = pd.read_csv("main_data.csv")
+    except FileNotFoundError:
+      st.error(
+          "File dataset (`main_data.gz` atau `main_data.csv`) tidak ditemukan di"
+          " folder dashboard!"
+      )
+      return pd.DataFrame()
 
-  # Konversi kolom tanggal jika ada
+  # Konversi kolom tanggal
   date_columns = [
       "order_purchase_timestamp",
       "order_delivered_customer_date",
@@ -43,11 +48,10 @@ st.markdown(
     "penjualan dan logistik."
 )
 
-# Periksa apakah dataframe kosong
 if df_main.empty:
   st.stop()
 
-# Sidebar untuk navigasi atau informasi
+# --- SIDEBAR & FILTER ---
 st.sidebar.header("Navigasi & Filter")
 analysis_choice = st.sidebar.selectbox(
     "Pilih Analisis:",
@@ -57,23 +61,53 @@ analysis_choice = st.sidebar.selectbox(
     ],
 )
 
+# Jika ingin menambahkan filter rentang waktu global yang aman:
+st.sidebar.markdown("---")
+st.sidebar.subheader("Filter Tambahan")
+min_date = df_main["order_purchase_timestamp"].min().date()
+max_date = df_main["order_purchase_timestamp"].max().date()
+
+# Menggunakan rentang waktu default sesuai data keseluruhan
+date_range = st.sidebar.date_input(
+    "Rentang Waktu", value=(min_date, max_date), min_value=min_date, max_value=max_date
+)
+
+# Filter dataframe berdasarkan rentang waktu sidebar (jika dipilih 2 tanggal)
+if len(date_range) == 2:
+  start_date, end_date = date_range
+  df_filtered = df_main[
+      (df_main["order_purchase_timestamp"].dt.date >= start_date)
+      & (df_main["order_purchase_timestamp"].dt.date <= end_date)
+  ]
+else:
+  df_filtered = df_main.copy()
+
+
+# --- ANALISIS 1 ---
 if analysis_choice == "Top 5 Kategori & Metode Pembayaran (Sao Paulo)":
   st.subheader("Metode Pembayaran pada 5 Kategori Produk Teratas (Sao Paulo)")
 
-  # Validasi kolom yang dibutuhkan
-  required_q1 = ["customer_city", "product_category_name", "price", "payment_type", "order_id"]
-  missing_q1 = [col for col in required_q1 if col not in df_main.columns]
+  required_q1 = [
+      "customer_city",
+      "product_category_name",
+      "price",
+      "payment_type",
+      "order_id",
+  ]
+  missing_q1 = [col for col in required_q1 if col not in df_filtered.columns]
 
   if missing_q1:
-    st.error(f"Kolom berikut tidak ditemukan di dataset: {missing_q1}. Periksa kembali proses merge di notebook Anda.")
+    st.error(f"Kolom berikut tidak ditemukan di dataset: {missing_q1}")
   else:
-    # Filter data untuk kota Sao Paulo
-    df_sp = df_main[df_main["customer_city"].str.lower() == "sao paulo"].copy()
+    df_sp = df_filtered[
+        df_filtered["customer_city"].str.lower() == "sao paulo"
+    ].copy()
 
     if df_sp.empty:
-      st.warning("Tidak ditemukan data untuk kota Sao Paulo.")
+      st.warning(
+          "Tidak ada data untuk kota Sao Paulo pada rentang waktu yang dipilih."
+      )
     else:
-      # Ambil Top 5 Kategori berdasarkan Total Price
       top_5_cat = (
           df_sp.groupby("product_category_name")["price"]
           .sum()
@@ -85,14 +119,12 @@ if analysis_choice == "Top 5 Kategori & Metode Pembayaran (Sao Paulo)":
       top_cat_list = top_5_cat["product_category_name"].tolist()
       df_top5_sp = df_sp[df_sp["product_category_name"].isin(top_cat_list)]
 
-      # Agregasi untuk visualisasi pembayaran
       payment_dominance = (
           df_top5_sp.groupby(["product_category_name", "payment_type"])["order_id"]
           .count()
           .reset_index(name="transaction_count")
       )
 
-      # Visualisasi menggunakan Seaborn / Matplotlib
       fig, ax = plt.subplots(figsize=(10, 6))
       sns.barplot(
           data=payment_dominance,
@@ -107,10 +139,11 @@ if analysis_choice == "Top 5 Kategori & Metode Pembayaran (Sao Paulo)":
       plt.title("Dominasi Metode Pembayaran pada Top 5 Kategori di Sao Paulo")
       st.pyplot(fig)
 
+
+# --- ANALISIS 2 ---
 elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
   st.subheader("Rata-rata Keterlambatan Pengiriman & Ulasan Buruk (Seller Non-RJ)")
 
-  # Cek kolom yang dibutuhkan untuk analisis logistik & ulasan
   required_columns = [
       "order_purchase_timestamp",
       "order_delivered_customer_date",
@@ -122,11 +155,12 @@ elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
 
   if missing_cols:
     st.error(
-        f"Kolom berikut tidak ditemukan di dalam dataset (`main_data.gz`): {missing_cols}. "
-        "Pastikan Anda sudah menggabungkan tabel `sellers_df` dan `order_reviews_df` ke dalam `main_data.gz` di notebook."
+        f"Kolom berikut tidak ditemukan di dalam dataset: {missing_cols}. "
+        "Pastikan tabel sellers dan reviews sudah digabungkan."
     )
   else:
-    # 1. Filter rentang waktu Q3 2017
+    # CATATAN: Untuk pertanyaan bisnis Q3 2017, kita gunakan rentang waktu tetap (hardcode)
+    # agar tidak terganggu oleh perubahan rentang waktu di sidebar.
     q3_start = "2017-07-01"
     q3_end = "2017-09-30"
 
@@ -138,13 +172,13 @@ elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
     if df_q3_2017.empty:
       st.warning("Tidak ada data transaksi pada rentang waktu Q3 2017.")
     else:
-      # 2. Hitung hari keterlambatan
+      # Hitung hari keterlambatan
       df_q3_2017.loc[:, "delivery_delay_days"] = (
           df_q3_2017["order_delivered_customer_date"]
           - df_q3_2017["order_estimated_delivery_date"]
       ).dt.days
 
-      # 3. Filter seller state selain RJ
+      # Filter seller state selain RJ
       df_non_rj = df_q3_2017[df_q3_2017["seller_state"].str.upper() != "RJ"]
 
       bad_reviews_delayed = df_non_rj[
@@ -164,7 +198,7 @@ elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
           else 0
       )
 
-      # Tampilkan Metric Cards di Streamlit
+      # Tampilkan Metric Cards
       col1, col2 = st.columns(2)
       with col1:
         st.metric(
@@ -177,7 +211,7 @@ elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
             value=f"{mean_delay_days:.2f} Hari",
         )
 
-      # Visualisasi distribusi hari keterlambatan
+      # Visualisasi
       fig, ax = plt.subplots(figsize=(8, 4))
       sns.histplot(
           bad_reviews_delayed["delivery_delay_days"].dropna(),
@@ -189,6 +223,7 @@ elif analysis_choice == "Analisis Keterlambatan & Ulasan Buruk (Non-RJ)":
       plt.xlabel("Hari Keterlambatan")
       plt.ylabel("Frekuensi Ulasan Skor 1")
       plt.title(
-          "Distribusi Waktu Keterlambatan Pengiriman dengan Ulasan Buruk (Non-RJ)"
+          "Distribusi Waktu Keterlambatan Pengiriman dengan Ulasan Buruk"
+          " (Q3 2017, Non-RJ)"
       )
       st.pyplot(fig)

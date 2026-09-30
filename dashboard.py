@@ -7,14 +7,14 @@ import streamlit as st
 sns.set(style="darkgrid")
 
 
-# 1. Load Cleaned Data dengan Path Otomatis Berbasis Lokasi File
+# 1. Load Cleaned Data (Membaca file 'main_data' sebagai CSV biasa)
 @st.cache_data
 def load_data():
   current_dir = os.path.dirname(os.path.abspath(__file__))
-
   file_path = os.path.join(current_dir, "main_data")
 
-  data = pd.read_csv(file_path, compression="gzip")
+  # Hapus parameter compression='gzip' karena file ini berupa teks CSV biasa
+  data = pd.read_csv(file_path)
 
   datetime_columns = [
       "order_purchase_timestamp",
@@ -128,7 +128,7 @@ def create_delivery_delay_df(df):
 
 # 3. Sidebar (Informasi / Kontrol Umum)
 with st.sidebar:
-  st.subheader("📌 Olist Dashboard Control")
+  st.subheader(" Olist Dashboard Control")
   st.markdown(
       "Dashboard ini menampilkan analisis berdasarkan kriteria bisnis spesifik"
       " (H1 2018 & Q3 2017)."
@@ -136,7 +136,7 @@ with st.sidebar:
   st.info("Periode waktu dikunci otomatis sesuai instruksi pertanyaan.")
 
 # 4. Tampilan Utama Dashboard
-st.header("📊 Dashboard Analisis E-Commerce Olist")
+st.header(" Dashboard Analisis E-Commerce Olist")
 st.markdown("---")
 
 # --- PERTANYAAN BISNIS 1 ---
